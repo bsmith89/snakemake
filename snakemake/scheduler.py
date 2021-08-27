@@ -28,7 +28,7 @@ from snakemake.executors.google_lifesciences import GoogleLifeSciencesExecutor
 from snakemake.executors.ga4gh_tes import TaskExecutionServiceExecutor
 from snakemake.exceptions import RuleException, WorkflowError, print_exception
 from snakemake.shell import shell
-from snakemake.common import async_run
+from snakemake.common import async_run, TBDString
 from snakemake.logging import logger
 
 from fractions import Fraction
@@ -550,6 +550,8 @@ class JobScheduler:
         for name, value in job.resources.items():
             if name in self.resources:
                 value = self.calc_resource(name, value)
+                if isinstance(value, TBDString):
+                    value = 0
                 self.resources[name] += value
 
     def _proceed(
@@ -886,7 +888,9 @@ class JobScheduler:
 
     def calc_resource(self, name, value):
         gres = self.global_resources[name]
-        if value > gres:
+        if isinstance(value, TBDString):
+            logger.warning("Resources not yet set. In development.")
+        elif value > gres:
             if name == "_cores":
                 name = "threads"
             raise WorkflowError(
@@ -900,15 +904,23 @@ class JobScheduler:
 
     def rule_weight(self, rule):
         res = rule.resources
-        return [
-            self.calc_resource(name, res.get(name, 0)) for name in self.global_resources
-        ]
+        values = []
+        for name in self.global_resources:
+            v = self.calc_resource(name, res.get(name, 0))
+            if isinstance(v, TBDString):
+                v = 0
+            values.append(v)
+        return values
 
     def job_weight(self, job):
         res = job.resources
-        return [
-            self.calc_resource(name, res.get(name, 0)) for name in self.global_resources
-        ]
+        values = []
+        for name in self.global_resources:
+            v = self.calc_resource(name, res.get(name, 0))
+            if isinstance(v, TBDString):
+                v = 0
+            values.append(v)
+        return values
 
     def job_reward(self, job):
         if self.touch or self.dryrun or self.workflow.immediate_submit:
